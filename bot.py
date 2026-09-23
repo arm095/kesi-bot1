@@ -76,15 +76,16 @@ def get_schedule():
         schedule_dict[day] = pairs
     return schedule_dict, group_h2.get_text(strip=True)
 
-def format_day(day_name, pairs):
+def format_day(day_name, pairs, is_week=False):
     if not pairs:
-        return f"<b>{day_name}</b>\nПар нет 🎉"
-    text = f"<b>{day_name}</b>\n\n"
+        return f"<b>{day_name}</b>\n🎉 Пар нет"
+
+    text = f"<b>{day_name}</b>\n"
     for p in pairs:
-        room = f" | {p['room']}" if p['room'] else ""
-        text += f"<b>{p['num']} пара</b> ({p['time']})\n"
-        text += f"{p['subject']}\n"
-        text += f"{p['teacher']}{room}\n\n"
+        room = f"  ·  {p['room']}" if p['room'] else ""
+        text += f"\n<b>{p['num']} пара</b>  {p['time']}\n"
+        text += f"📚 {p['subject']}\n"
+        text += f"👤 {p['teacher']}{room}\n"
     return text.strip()
 
 def get_day_schedule(target="today"):
@@ -98,36 +99,73 @@ def get_day_schedule(target="today"):
 
     for day_key, pairs in sched.items():
         if target_str in day_key:
-            title = "Сегодня" if target == "today" else "Завтра"
-            return f"📅 <b>{title}</b> ({day_key})\nГруппа: {group_name}\n\n" + format_day(day_key, pairs)
+            title = "📅 Сегодня" if target == "today" else "📅 Завтра"
+            header = f"{title}\n<b>{day_key}</b>\nГруппа: {group_name}\n{'─' * 20}\n"
+            return header + format_day(day_key, pairs)
 
     return f"На {'сегодня' if target == 'today' else 'завтра'} пар в расписании не найдено."
+
+def get_week_schedule():
+    sched, group_name = get_schedule()
+    if sched is None:
+        return group_name
+
+    if not sched:
+        return "Расписание на неделю пока пустое."
+
+    text = f"📆 <b>Расписание на неделю</b>\nГруппа: {group_name}\n{'─' * 22}\n\n"
+
+    # Сортируем дни примерно по порядку
+    day_order = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    
+    sorted_days = sorted(
+        sched.items(),
+        key=lambda x: next((i for i, d in enumerate(day_order) if x[0].startswith(d)), 99)
+    )
+
+    for day_key, pairs in sorted_days:
+        text += format_day(day_key, pairs, is_week=True) + "\n\n"
+
+    return text.strip()
+
+# ========== КОМАНДЫ ==========
 
 @bot.message_handler(commands=['start', 'help'])
 def start(message):
     user_chat_ids.add(message.chat.id)
     text = (
         "Привет! Я бот с расписанием колледжа КЭСИ 📚\n\n"
-        "Команды:\n"
+        "<b>Команды:</b>\n"
         "/сегодня — расписание на сегодня\n"
-        "/завтра — расписание на завтра\n\n"
-        "Или просто напиши «сегодня» / «завтра».\n\n"
-        "Каждый вечер я буду сам присылать расписание на завтра."
+        "/завтра — расписание на завтра\n"
+        "/неделя — расписание на всю неделю\n\n"
+        "Можно просто написать:\n"
+        "• сегодня\n"
+        "• завтра\n"
+        "• неделя\n\n"
+        "Каждый вечер в 20:00 я присылаю расписание на завтра."
     )
-    bot.reply_to(message, text)
+    bot.reply_to(message, text, parse_mode="HTML")
 
 @bot.message_handler(commands=['сегодня', 'today'])
 def today_cmd(message):
     user_chat_ids.add(message.chat.id)
-    bot.reply_to(message, "Секунду, смотрю расписание...")
+    bot.send_chat_action(message.chat.id, 'typing')
     result = get_day_schedule("today")
     bot.send_message(message.chat.id, result, parse_mode="HTML")
 
 @bot.message_handler(commands=['завтра', 'tomorrow'])
 def tomorrow_cmd(message):
     user_chat_ids.add(message.chat.id)
-    bot.reply_to(message, "Секунду, смотрю расписание...")
+    bot.send_chat_action(message.chat.id, 'typing')
     result = get_day_schedule("tomorrow")
+    bot.send_message(message.chat.id, result, parse_mode="HTML")
+
+@bot.message_handler(commands=['неделя', 'week'])
+def week_cmd(message):
+    user_chat_ids.add(message.chat.id)
+    bot.send_chat_action(message.chat.id, 'typing')
+    result = get_week_schedule()
     bot.send_message(message.chat.id, result, parse_mode="HTML")
 
 @bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ["сегодня", "today"])
@@ -138,13 +176,17 @@ def today_text(message):
 def tomorrow_text(message):
     tomorrow_cmd(message)
 
+@bot.message_handler(func=lambda m: m.text and m.text.lower().strip() in ["неделя", "week"])
+def week_text(message):
+    week_cmd(message)
+
 def send_daily():
     if not user_chat_ids:
         return
     result = get_day_schedule("tomorrow")
     for chat_id in list(user_chat_ids):
         try:
-            bot.send_message(chat_id, "🔔 Расписание на завтра:\n\n" + result, parse_mode="HTML")
+            bot.send_message(chat_id, "🔔 <b>Расписание на завтра</b>\n\n" + result, parse_mode="HTML")
         except Exception:
             user_chat_ids.discard(chat_id)
 
