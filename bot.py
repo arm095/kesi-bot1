@@ -11,7 +11,7 @@ from flask import Flask
 
 # ========== НАСТРОЙКИ ==========
 TOKEN = os.environ.get("TOKEN")
-GROUP = "ДЮ-9-2025"
+GROUP = "ДЮ 9-2025"
 # ==============================
 
 if not TOKEN:
